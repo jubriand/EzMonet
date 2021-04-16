@@ -1,4 +1,5 @@
 #https://www.kaggle.com/c/gan-getting-started/data
+#https://www.bpesquet.fr/mlhandbook/algorithms/generative_adversarial_networks.html
 
 
 import platform
@@ -14,7 +15,7 @@ import glob
 import random
 from random import shuffle
 from PIL import Image
-
+from sys import exit
 
 
 # Setup plots
@@ -48,10 +49,14 @@ from tensorflow.keras.layers import (
 
 #print(f"x_train: {x_train.shape}")
 
+###
+###----------------LOAD DATA-------------------###
+###
 monet_jpg=[]
 photo_jpg=[]
 monet_tfrec=[]
 photo_tfrec=[]
+
 
 for file in glob.glob("gan-getting-started/monet_jpg/*.jpg"):
     #print(file)
@@ -64,8 +69,19 @@ for file in glob.glob("gan-getting-started/photo_jpg/*.jpg"):
     photo_jpg.append(file)
 
 #Shuffle the pictures in one list
-data_jpg=monet_jpg+photo_jpg
-random.shuffle(data_jpg)
+#data_jpg=monet_jpg+photo_jpg
+#random.shuffle(data_jpg)
+
+for k in range (len(monet_jpg)):
+    img = Image.open(monet_jpg[k]).convert('RGB')
+    img=img.resize((16,16))
+    monet_jpg[k]= np.array(img)
+for k in range (len(photo_jpg)):
+    img=Image.open(photo_jpg[k]).convert('RGB')
+    img=img.resize((16,16))
+    photo_jpg[k]= np.array(img)
+    
+
 
 for file in glob.glob("gan-getting-started/monet_tfrec/*.tfrec"):
     monet_tfrec.append(file)
@@ -78,22 +94,60 @@ for file in glob.glob("gan-getting-started/photo_tfrec/*.tfrec"):
     raw_dataset = tf.data.TFRecordDataset(file)
 #    raw_dataset_photo = tf.data.TFRecordDataset(file)
 
+###
+###
+###---------------------------------------------###
+
+###
+###---------------PREPARING THE DATA------------###
+###
+
+train_images=[]
+train_labels=[]
+test_images=[]
+test_labels=[]
+
+for k in range (59): #20% of the database
+    test_images.append(monet_jpg[k])
+for i in range (59,300):
+    train_images.append(monet_jpg[i])
+for k in range (1409):
+    test_images.append(photo_jpg[k])
+for i in range(1409,7038):
+    train_images.append(photo_jpg[k])
+
+
+
 #Display the components of the last raw_dataset     
 for raw_record in raw_dataset.take(1):
   example = tf.train.Example()
   example.ParseFromString(raw_record.numpy())
   #print(example)
   
-train_images=data_jpg
+
 x_train=[]
 for i in range (len(train_images)):
     #img = Image.open(data_jpg[i])[:,:,0]/255
-    img=mpimg.imread(data_jpg[i])[:,:,0].astype("float32")/255
+    img=train_images[i][:,:,0].astype("float32")/255
+    #img=mpimg.imread(train_images[i])[:,:,0].astype("float32")/255
     x_train.append(img)
+
+x_test=[]
+for i in range (len(test_images)):
+    #img = Image.open(data_jpg[i])[:,:,0]/255
+    img=test_images[i][:,:,0].astype("float32")/255
+    #img=mpimg.imread(test_images[i])[:,:,0].astype("float32")/255
+    x_test.append(img)
+    
+print(f'x_train: ({len(x_train)},{x_train[0].shape}). x_test: ({len(x_test)},{x_test[0].shape})')
 
     
 codings_size = 30
-image_shape=256
+image_shape=16
+
+###
+###------------------DEFINE A MODEL----------------------###
+###
 
 generator = Sequential(
     [
@@ -121,7 +175,6 @@ gan = Sequential([generator, discriminator])
 gan.summary()
 
 # The generator is trained through the GAN model: no need to compile it
-
 discriminator.compile(loss="binary_crossentropy", optimizer="rmsprop")
 
 # The trainable attribute is taken into account only when compiling a model
@@ -130,6 +183,8 @@ discriminator.compile(loss="binary_crossentropy", optimizer="rmsprop")
 discriminator.trainable = False
 
 gan.compile(loss="binary_crossentropy", optimizer="rmsprop")
+
+
 
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 50, fill = '█', printEnd = "\r"):
     """
@@ -174,6 +229,7 @@ def train_gan(gan, dataset, batch_size, codings_size, n_epochs=50):
             y_gen = tf.constant([[1.0]] * batch_size)
             # Update only the generator weights (see above)
             gan.train_on_batch(noise, y_gen)
+
     print("Entrainement terminé !")
     
 batch_size = 32
@@ -184,14 +240,25 @@ dataset = tf.data.Dataset.from_tensor_slices(x_train).shuffle(1000)
 dataset = dataset.batch(batch_size, drop_remainder=True).prefetch(1)
 
 # Train the GAN model
-train_gan(gan, dataset, batch_size, codings_size, n_epochs=1)
+train_gan(gan, dataset, batch_size, codings_size, n_epochs=100)
+#history=gan.fit(x = dataset, epochs = 10)
+#print(history.history.keys())
 
 noise = tf.random.normal(shape=(batch_size, codings_size))
 generated_images = generator(noise)
 
+tf.keras.callbacks.EarlyStopping(
+    monitor="val_loss",
+    min_delta=0,
+    patience=0,
+    verbose=0,
+    mode="auto",
+    baseline=None,
+    restore_best_weights=False,
+)
 
 for k in range (len(generated_images)):
-    imgplot = plt.imshow(generated_images[k])
+    imgplot = plt.imshow(generated_images[k],cmap=plt.cm.binary)
     plt.show()
     
 
