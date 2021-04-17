@@ -148,12 +148,21 @@ image_shape=16
 ###
 ###------------------DEFINE A MODEL----------------------###
 ###
+# generator = Sequential()
+# model.add(Flatten(input_shape=(16, 16)))
+# model.add(Dense(15, activation='relu'))
+# model.add(Dense(10, activation='softmax'))
+
+# model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
+
 
 generator = Sequential(
     [
         Dense(100, activation="selu", input_shape=(codings_size,)),
-        Dense(150, activation="selu"),
+        #Dense(100, activation="selu", input_shape=(image_shape, image_shape)),
+        Dense(150, activation="selu"),       
         Dense(image_shape * image_shape, activation="sigmoid"),
+        #Dense(image_shape, activation="sigmoid"),
         Reshape((image_shape, image_shape)),
     ],
     name="generator"
@@ -239,12 +248,14 @@ batch_size = 32
 dataset = tf.data.Dataset.from_tensor_slices(x_train).shuffle(1000)
 dataset = dataset.batch(batch_size, drop_remainder=True).prefetch(1)
 
+#gan.evaluate(x=dataset, batch_size=batch_size)
 # Train the GAN model
-train_gan(gan, dataset, batch_size, codings_size, n_epochs=100)
-#history=gan.fit(x = dataset, epochs = 10)
+train_gan(gan, dataset, batch_size, codings_size, n_epochs=50)
+#history=gan.fit(x = x_train, epochs = 50) #add batch_size then
 #print(history.history.keys())
 
 noise = tf.random.normal(shape=(batch_size, codings_size))
+#noise = tf.random.normal(shape=(image_shape, image_shape))
 generated_images = generator(noise)
 
 tf.keras.callbacks.EarlyStopping(
@@ -258,7 +269,8 @@ tf.keras.callbacks.EarlyStopping(
 )
 
 for k in range (len(generated_images)):
-    imgplot = plt.imshow(generated_images[k],cmap=plt.cm.binary)
+    #img=generated_images[k][:,:,0].astype("float32")*255
+    imgplot = plt.imshow(generated_images[k],cmap=plt.cm.binary)    
     plt.show()
     
 
